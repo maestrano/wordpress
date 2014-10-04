@@ -110,6 +110,22 @@ if ($maestrano->isSsoEnabled()) {
   	echo "<script type='text/javascript'>window.location = '{$redirect}';</script>";
   }
   
+  // Add the Star! framework to Wordpress - Only on administration
+  // pages
+  function mno_add_star_framework() {
+    if ( is_user_admin() ) {
+      ?>
+      <script src="//cdn.maestrano.com/apps/mno_libs/mno-loader.js" type="text/javascript"></script>
+      <script type="text/javascript">
+        window.mnoLoader.init('wordpress','1');
+      </script>
+      <?php
+    }
+  }
+  
   // Make sure user goes through maestrano login/logout process
   add_action( 'login_head', 'mno_redirect_user_from_login' );
+  
+  // Add Star! framework
+  add_action('wp_footer', 'mno_add_star_framework');
 }
