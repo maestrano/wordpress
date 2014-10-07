@@ -139,10 +139,12 @@ class MnoSsoUser extends MnoSsoBaseUser
    */
   protected function getLocalIdByUid()
   {
-    $result = get_user_by('mno_uid',$this->uid);
+    global $wpdb;
+   
+    $result = $wpdb->get_row( $wpdb->prepare("SELECT ID FROM $wpdb->users WHERE mno_uid = %s", $this->uid) );
     
-    if ($result && $result->id) {
-      return $result->id;
+    if ($result && $result->ID) {
+      return $result->ID;
     }
     
     return null;
