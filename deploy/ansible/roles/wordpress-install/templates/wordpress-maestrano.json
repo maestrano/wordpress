@@ -1,0 +1,19 @@
+{
+    "environment": "{{ maestrano_environment }}",
+    "app": {
+        "host": "http://{{ server_hostname }}"
+    },
+    "sso": {
+        "enabled": {{ sso_enabled }},
+        "slo_enabled": true,
+        "init_path": "/maestrano/auth/saml/init.php",
+        "consume_path": "/maestrano/auth/saml/consume.php",
+        "creation_mode": "virtual"
+    },
+    "webhook": {
+        "account": {
+            "groupsPath": "/maestrano/account/groups/:id",
+            "groupUsersPath": "/maestrano/account/groups/:group_id/users/:id"
+        }
+    }
+}
