@@ -1,18 +1,18 @@
 <?php
 
 /**
- * Configure App specific behavior for 
+ * Configure App specific behavior for
  * Maestrano SSO
  */
-class MnoSsoUser extends MnoSsoBaseUser
+class MnoSsoUser extends Maestrano_Sso_User
 {
   /**
    * Database connection
    * @var PDO
    */
   public $connection = null;
-  
-  
+
+
   /**
    * Extend constructor to inialize app specific objects
    *
@@ -20,19 +20,40 @@ class MnoSsoUser extends MnoSsoBaseUser
    *   A SamlResponse object from Maestrano containing details
    *   about the user being authenticated
    */
-  public function __construct(OneLogin_Saml_Response $saml_response, &$session = array(), $opts = array())
+  public function __construct($saml_response, $opts = array())
   {
     // Call Parent
-    parent::__construct($saml_response,$session);
-    
+    parent::__construct($saml_response);
+
     // Assign new attributes
     $this->connection = $opts['db_connection'];
   }
-  
-  
+
   /**
-   * Sign the user in the application. 
-   * Parent method deals with putting the mno_uid, 
+  * Find or Create a user based on the SAML response parameter and Add the user to current session
+  */
+  public function findOrCreate() {
+    // Find user by uid or email
+    $local_id = $this->getLocalIdByUid();
+    if($local_id == null) { $local_id = $this->getLocalIdByEmail(); }
+
+    if ($local_id) {
+      // User found, load it
+      $this->local_id = $local_id;
+      $this->syncLocalDetails();
+    } else {
+      // New user, create it
+      $this->local_id = $this->createLocalUser();
+      $this->setLocalUid();
+    }
+
+    // Add user to current session
+    $this->setInSession();
+  }
+
+  /**
+   * Sign the user in the application.
+   * Parent method deals with putting the mno_uid,
    * mno_session and mno_session_recheck in session.
    *
    * @return boolean whether the user was successfully set in session or not
@@ -40,23 +61,23 @@ class MnoSsoUser extends MnoSsoBaseUser
   protected function setInSession()
   {
     if ($this->local_id) {
-        
+
   			global $current_user;
   			get_currentuserinfo();
-        
+
         wp_set_current_user($this->local_id);
         wp_set_auth_cookie($this->local_id, true);
         do_action('wp_login', $this->local_id);
-        
+
         return true;
     } else {
         return false;
     }
   }
-  
-  
+
+
   /**
-   * Used by createLocalUserOrDenyAccess to create a local user 
+   * Used by createLocalUserOrDenyAccess to create a local user
    * based on the sso user.
    * If the method returns null then access is denied
    *
@@ -65,21 +86,19 @@ class MnoSsoUser extends MnoSsoBaseUser
   protected function createLocalUser()
   {
     $lid = null;
-    
-    if ($this->accessScope() == 'private') {
-			$user = $this->buildLocalUser();
-      
-      // Create user
-      $lid = wp_insert_user($user);
-      
-      if (!is_int($lid) || $lid == 0) {
-        $lid = null;
-      }
+
+		$user = $this->buildLocalUser();
+
+    // Create user
+    $lid = wp_insert_user($user);
+
+    if (!is_int($lid) || $lid == 0) {
+      $lid = null;
     }
-    
+
     return $lid;
   }
-  
+
   /**
    * Build a local user for creation
    *
@@ -87,25 +106,24 @@ class MnoSsoUser extends MnoSsoBaseUser
    */
   protected function buildLocalUser()
   {
-    $fullname = ($this->name . ' ' . $this->surname);
+    $fullname = ($this->getFirstName() . ' ' . $this->getLastName());
     $password = $this->generatePassword();
-    
+
     $user = Array(
       'user_login'    => $this->uid,
-      'user_email'    => $this->email,
+      'user_email'    => $this->getEmail(),
       'role'          => $this->getRoleToAssign(),
-      'first_name'    => $this->name,
-      'last_name'     => $this->surname,
+      'first_name'    => $this->getFirstName(),
+      'last_name'     => $this->getLastName(),
       'nickname'      => $fullname,
       'display_name'  => $fullname,
       'user_nicename' => $fullname,
-      'pass1'         => $password,
-      'pass2'         => $password
+      'user_pass'     => $password
     );
-    
+
     return $user;
   }
-  
+
   /**
    * Return the role to give to the user based on context
    * If the user is the owner of the app or at least Admin
@@ -115,23 +133,15 @@ class MnoSsoUser extends MnoSsoBaseUser
    * @return the ID of the user created, null otherwise
    */
   public function getRoleToAssign() {
-    $role = 'contributor'; // User
-  
-    if ($this->app_owner) {
-      $role = 'administrator'; // Admin
+    if ($this->getGroupRole() == 'Admin' || $this->getGroupRole() == 'Super Admin') {
+      $role = 'administrator';
     } else {
-      foreach ($this->organizations as $organization) {
-        if ($organization['role'] == 'Admin' || $organization['role'] == 'Super Admin') {
-          $role = 'administrator';
-        } else {
-          $role = 'contributor';
-        }
-      }
+      $role = 'contributor'; // User
     }
-  
+
     return $role;
   }
-  
+
   /**
    * Get the ID of a local user via Maestrano UID lookup
    *
@@ -140,16 +150,16 @@ class MnoSsoUser extends MnoSsoBaseUser
   protected function getLocalIdByUid()
   {
     global $wpdb;
-   
+
     $result = $wpdb->get_row( $wpdb->prepare("SELECT ID FROM $wpdb->users WHERE mno_uid = %s", $this->uid) );
-    
+
     if ($result && $result->ID) {
       return $result->ID;
     }
-    
+
     return null;
   }
-  
+
   /**
    * Get the ID of a local user via email lookup
    *
@@ -158,14 +168,14 @@ class MnoSsoUser extends MnoSsoBaseUser
   protected function getLocalIdByEmail()
   {
     $result = get_user_by('email',$this->email);
-    
+
     if ($result && $result->id) {
       return $result->id;
     }
-    
+
     return null;
   }
-  
+
   /**
    * Set all 'soft' details on the user (like name, surname, email)
    * Implementing this method is optional.
@@ -175,34 +185,34 @@ class MnoSsoUser extends MnoSsoBaseUser
    protected function syncLocalDetails()
    {
      if($this->local_id) {
-       $fullname = $this->name . ' ' . $this->surname;
-       
+       $fullname = $this->getFirstName() . ' ' . $this->getLastName();
+
        // Update user table
-       $upd = $this->connection->update($this->connection->users, 
+       $upd = $this->connection->update($this->connection->users,
          array(
-           'user_login' => $this->uid, 
+           'user_login' => $this->uid,
            'user_nicename' => $fullname,
            'display_name'  => $fullname,
-         ), 
-         array('ID' => $this->local_id) 
+         ),
+         array('ID' => $this->local_id)
        );
-       
+
        // Update user meta
-       $upd = $this->connection->update($this->connection->usermeta, 
-         array('meta_value' => $this->name), 
+       $upd = $this->connection->update($this->connection->usermeta,
+         array('meta_value' => $this->name),
          array('user_id' => $this->local_id, 'meta_key' => 'first_name')
        );
-       $upd = $this->connection->update($this->connection->usermeta, 
-         array('meta_value' => $this->surname), 
+       $upd = $this->connection->update($this->connection->usermeta,
+         array('meta_value' => $this->surname),
          array('user_id' => $this->local_id, 'meta_key' => 'last_name')
        );
-       
+
        return $upd;
      }
-     
+
      return false;
    }
-  
+
   /**
    * Set the Maestrano UID on a local user via id lookup
    *
@@ -211,16 +221,33 @@ class MnoSsoUser extends MnoSsoBaseUser
   protected function setLocalUid()
   {
     if($this->local_id) {
-      $upd = $this->connection->update($this->connection->users, 
+      $upd = $this->connection->update($this->connection->users,
         array(
           'mno_uid' => $this->uid,
-        ), 
-        array('ID' => $this->local_id) 
+        ),
+        array('ID' => $this->local_id)
       );
-      
+
       return $upd;
     }
-    
+
     return false;
+  }
+
+  /**
+   * Generate a random password.
+   * Convenient to set dummy passwords on users
+   *
+   * @return string a random password
+   */
+  protected function generatePassword()
+  {
+    $length = 20;
+    $characters = '0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ';
+    $randomString = '';
+    for ($i = 0; $i < $length; $i++) {
+        $randomString .= $characters[rand(0, strlen($characters) - 1)];
+    }
+    return $randomString;
   }
 }

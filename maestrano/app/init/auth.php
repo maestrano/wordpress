@@ -25,6 +25,3 @@ require_once APP_DIR . '/wp-includes/user.php';
 global $wpdb;
 $opts = array();
 $opts['db_connection'] = $wpdb;
-
-$maestrano = MaestranoService::getInstance();
-$maestrano->setAfterSsoSignInPath('/wp-admin');
