@@ -145,6 +145,11 @@
   tags:
     - configuration
 
+- name: WordPress | Update plugins
+  command: wp plugin update --all --allow-root
+  args:
+    chdir: "{{ wordpress_root_path }}"
+
 - name: WordPress | Set file permissions
   file:
     path: "{{ wordpress_root_path }}"
