@@ -74,6 +74,8 @@
     owner: www-data
     group: www-data
     mode: 0755
+  tags:
+    - configuration
 
 - name: WordPress | Enable Apache virtual host
   file: src=/etc/apache2/sites-available/wordpress.conf dest=/etc/apache2/sites-enabled/wordpress.conf state=link
@@ -90,8 +92,8 @@
     owner: www-data
     group: www-data
     mode: 0500
-  # tags:
-  #   - configuration
+  tags:
+    - configuration
 
 - name: WordPress | Configuration file maestrano.json
   template:
