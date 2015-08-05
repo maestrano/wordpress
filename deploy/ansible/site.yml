@@ -1,0 +1,11 @@
+---
+
+# This playbook installs and configures WordPress
+- hosts: localhost
+  connection: local
+  roles:
+    - apache
+    - mysql
+    - ssmtp
+    - wp-cli
+    - wordpress-install

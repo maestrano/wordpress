@@ -1,0 +1,164 @@
+# Include wordpress specific configuration
+- include_vars: "{{ item }}"
+  with_items:
+    - wordpress.yml
+    - version.yml
+  tags:
+    - configuration
+    - update
+
+- name: General | Install Application packages
+  apt: "name={{ item }} state=present"
+  with_items:
+    - git
+    - curl
+
+- name: WordPress | Ensure MySQL is running
+  command: service mysql start
+  ignore_errors: yes
+  tags:
+    - configuration
+
+- name: WordPress | Create WordPress database
+  mysql_db:
+    login_user: root
+    login_password: "{{ mysql_root_password }}"
+    db: "{{ wordpress_db_name }}"
+    state: present
+
+- name: WordPress | Create WordPress database user
+  mysql_user:
+    name: "{{ wordpress_db_user }}"
+    password: "{{ wordpress_db_password }}"
+    priv: "{{ wordpress_db_name }}.*:ALL,GRANT"
+    state: present
+    login_user: root
+    login_password: "{{ mysql_root_password }}"
+
+- name: WordPress | Download application from Github
+  sudo: false
+  git:
+    repo: "https://github.com/{{ application_repository }}/wordpress.git"
+    dest: "{{ wordpress_root_path }}"
+    version: "{{ application_version }}"
+    accept_hostkey: yes
+    ssh_opts: "-o StrictHostKeyChecking=no"
+    update: yes
+    force: yes
+  tags:
+    - update
+
+- name: WordPress | Current commit hash
+  shell: 'git log -n 1 --pretty=format:"%H" > {{ wordpress_root_path }}/.git-version'
+  args:
+    chdir: "{{ wordpress_root_path }}"
+  tags:
+    - update
+
+- name: Git | Ignore files permissions changes
+  command: "git config core.filemode false chdir={{ wordpress_root_path }}"
+  tags:
+    - update
+
+- name: Ansible | Update scripts
+  copy:
+    src: "{{ wordpress_root_path }}/deploy/ansible"
+    dest: /etc/
+  tags:
+    - update
+
+- name: WordPress | Configure Apache virtual host
+  template:
+    src: etc-apache24-confd-wordpress-conf
+    dest: /etc/apache2/sites-available/wordpress.conf
+    owner: www-data
+    group: www-data
+    mode: 0755
+  tags:
+    - configuration
+
+- name: WordPress | Enable Apache virtual host
+  file: src=/etc/apache2/sites-available/wordpress.conf dest=/etc/apache2/sites-enabled/wordpress.conf state=link
+
+- name: Apache | Restart the Apache service
+  service:
+    name: apache2
+    state: restarted
+
+- name: WordPress | Configuration file config.php
+  template:
+    src: wp-config.php
+    dest: "{{ wordpress_root_path }}/wp-config.php"
+    owner: www-data
+    group: www-data
+    mode: 0500
+  tags:
+    - configuration
+
+- name: WordPress | Configuration file maestrano.json
+  template:
+    src: wordpress-maestrano.json
+    dest: "{{ wordpress_root_path }}/maestrano.json"
+    owner: www-data
+    group: www-data
+    mode: 777
+  tags:
+    - configuration
+
+- name: WordPress | Is WordPress installed?
+  command: wp core is-installed --allow-root
+  args:
+    chdir: "{{ wordpress_root_path }}/"
+  register: wordpress_is_installed
+  ignore_errors: True
+
+- name: WordPress | Install WordPress tables
+  command: wp core install  --allow-root
+            --url="{{ server_hostname }}"
+            --title="{{ wordpress_site_title }}"
+            --admin_user="{{ wordpress_admin_username }}"
+            --admin_password="{{ wordpress_admin_password }}"
+            --admin_email="{{ wordpress_admin_email }}"
+  args:
+      chdir: "{{ wordpress_root_path  }}/"
+  when: wordpress_is_installed|failed
+
+- name: WordPress | Apply Maestrano patch
+  shell: "mysql {{ wordpress_db_name }} -u{{wordpress_db_user}} -p{{wordpress_db_password}} < maestrano/app/db/{{ item }}"
+  args:
+    chdir: "{{ wordpress_root_path }}"
+  with_items:
+    - 1_add_mno_uid_field.sql
+
+- name: WordPress | wordpress-config-data.sql
+  template:
+    src: wordpress-config-data.sql
+    dest: "{{ wordpress_root_path }}/maestrano/app/db/wordpress-config-data.sql"
+    owner: www-data
+    group: www-data
+    mode: 0755
+  tags:
+    - configuration
+
+- name: WordPress | Update configuration
+  shell: "mysql {{ wordpress_db_name }} -u{{wordpress_db_user}} -p{{wordpress_db_password}} < maestrano/app/db/wordpress-config-data.sql"
+  args:
+    chdir: "{{ wordpress_root_path }}"
+  tags:
+    - configuration
+
+- name: WordPress | Update plugins
+  command: wp plugin update --all --allow-root
+  args:
+    chdir: "{{ wordpress_root_path }}"
+
+- name: WordPress | Set file permissions
+  file:
+    path: "{{ wordpress_root_path }}"
+    mode: 0755
+    owner: www-data
+    group: www-data
+    state: directory
+    recurse: yes
+  tags:
+    - configuration

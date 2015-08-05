@@ -9,34 +9,26 @@
  */
 
 require_once ABSPATH . 'maestrano/app/init/base.php';
-$maestrano = MaestranoService::getInstance();
 // Redefine session and login functions if enabled
-if ($maestrano->isSsoEnabled()) {
-  
+if (Maestrano::sso()->isSsoEnabled()) {
+
   // Redefined function to check if maestrano session
   // is still valid
   function is_user_logged_in() {
-    $maestrano = MaestranoService::getInstance();
   	$user = wp_get_current_user();
-    
+
     // Start session if not started already
     if (!isset($_SESSION)) session_start();
-    
+    $mnoSession = new Maestrano_Sso_Session($_SESSION);
+
     // Check user exists and maestrano session is still valid
-  	if ( !$user->exists() || !$maestrano->getSsoSession()->isValid()) {
-      if ($maestrano->isSsoIntranetEnabled()) {
-        // Redirect straight to authentication if intranet
-        // mode enabled
-        wp_redirect($maestrano->getSsoInitUrl());
-      } else {
-        return false;
-      }
-  	  
+  	if ( !$user->exists() || !$mnoSession->isValid()) {
+      return false;
   	}
 
   	return true;
   }
-  
+
   // Change auth redirect url
   function auth_redirect() {
   	// Checks if a user is logged in, if not redirects them to the login page
@@ -82,34 +74,26 @@ if ($maestrano->isSsoEnabled()) {
   	nocache_headers();
 
   	$redirect = ( strpos( $_SERVER['REQUEST_URI'], '/options.php' ) && wp_get_referer() ) ? wp_get_referer() : set_url_scheme( 'http://' . $_SERVER['HTTP_HOST'] . $_SERVER['REQUEST_URI'] );
-    
+
     // Change login url
-    $maestrano = MaestranoService::getInstance();
-  	$login_url = $maestrano->getSsoInitUrl();
+  	$login_url = Maestrano::sso()->getInitPath();
 
   	wp_redirect($login_url);
   	exit();
   }
-  
+
   function mno_redirect_user_from_login() {
-    $maestrano = MaestranoService::getInstance();
-    
     if ($_GET["loggedout"] == 'true') {
-      if ($maestrano->isSsoIntranetEnabled()) {
-        // Redirect straight to maestrano logout page
-        $redirect = $maestrano->getSsoLogoutUrl();
-      } else {
-        // Redirect to blog home page
-        $redirect = '/';
-      }
+      // Redirect to blog home page
+      $redirect = '/';
     } else {
       // Login - Trigger SSO
-    	$redirect = $maestrano->getSsoInitUrl();
+    	$redirect = Maestrano::sso()->getInitPath();
     }
-    
+
   	echo "<script type='text/javascript'>window.location = '{$redirect}';</script>";
   }
-  
+
   // Add the Star! framework to Wordpress - Only on administration
   // pages
   function mno_add_star_framework() {
@@ -122,10 +106,10 @@ if ($maestrano->isSsoEnabled()) {
       <?php
     }
   }
-  
+
   // Make sure user goes through maestrano login/logout process
   add_action( 'login_head', 'mno_redirect_user_from_login' );
-  
+
   // Add Star! framework
   add_action('wp_footer', 'mno_add_star_framework');
 }
