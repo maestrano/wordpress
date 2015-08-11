@@ -112,4 +112,9 @@ if (Maestrano::sso()->isSsoEnabled()) {
 
   // Add Star! framework
   add_action('wp_footer', 'mno_add_star_framework');
+
+  // Changes the email address that WP puts in the 'from' address
+  add_filter( 'wp_mail_from', function( $email ) {
+    return 'wordpress@maestrano.com';
+  });
 }
