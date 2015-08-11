@@ -35,6 +35,22 @@
     login_user: root
     login_password: "{{ mysql_root_password }}"
 
+- name: WordPress | Check if repo exists
+  stat:
+    path: "{{ wordpress_root_path }}/"
+  register: check_repo_path
+  tags:
+    - update
+
+- name: WordPress | Stash local changes
+  shell: 'git stash'
+  args:
+    chdir: "{{ wordpress_root_path }}/"
+  register: local_change_stashed
+  when: check_repo_path.stat.exists
+  tags:
+    - update
+
 - name: WordPress | Download application from Github
   sudo: false
   git:
@@ -45,6 +61,22 @@
     ssh_opts: "-o StrictHostKeyChecking=no"
     update: yes
     force: yes
+  tags:
+    - update
+
+- name: WordPress | Reapply local changes
+  shell: 'git stash apply'
+  args:
+    chdir: "{{ wordpress_root_path }}/"
+  when: (check_repo_path.stat.exists and local_change_stashed|success and local_change_stashed.stdout != 'No local changes to save')
+  tags:
+    - update
+
+- name: WordPress | Drop the stash
+  shell: 'git stash drop'
+  args:
+    chdir: "{{ wordpress_root_path }}/"
+  when: (check_repo_path.stat.exists and local_change_stashed|success and local_change_stashed.stdout != 'No local changes to save')
   tags:
     - update
 
@@ -146,6 +178,13 @@
     chdir: "{{ wordpress_root_path }}"
   tags:
     - configuration
+
+- name: WordPress | Update core
+  command: wp core update --allow-root
+  args:
+    chdir: "{{ wordpress_root_path }}"
+  tags:
+    - update
 
 - name: WordPress | Update plugins
   command: wp plugin update --all --allow-root
