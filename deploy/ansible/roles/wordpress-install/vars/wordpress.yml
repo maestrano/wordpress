@@ -1,0 +1,15 @@
+# WordPress installation
+wordpress_db_user: wordpress
+wordpress_db_password: wordpress
+wordpress_db_name: wordpress
+wordpress_root_path: /var/lib/wordpress/webapp
+
+wordpress_site_title: YourSite
+wordpress_admin_email: admin@example.com
+wordpress_admin_username: admin
+wordpress_admin_password: password123123
+
+# WordPress default configuration
+sso_enabled: "false"
+maestrano_environment: "production"
+server_hostname: "{{ansible_default_ipv4.address}}"

@@ -2,7 +2,7 @@
 /**
  * This controller processes a SAML response and deals with
  * user matching, creation and authentication
- * Upon successful authentication it redirects to the URL 
+ * Upon successful authentication it redirects to the URL
  * the user was trying to access.
  * Upon failure it redirects to the Maestrano access
  * unauthorized page
@@ -33,41 +33,35 @@ if(isset($previous_url)) {
 	$_SESSION['mno_previous_url'] = $previous_url;
 }
 
-// Get Maestrano Service
-$maestrano = MaestranoService::getInstance();
-
 // Options variable
 if (!isset($opts)) {
   $opts = array();
 }
 
 // Build SAML response
-$samlResponse = new OneLogin_Saml_Response($maestrano->getSettings()->getSamlSettings(), $_POST['SAMLResponse']);
+$samlResponse = new Maestrano_Saml_Response($_POST['SAMLResponse']);
 
 try {
     if ($samlResponse->isValid()) {
-        
+        // Get the user as well as the user group
+        $user = new Maestrano_Sso_User($samlResponse);
+
         // Get Maestrano User
-        $sso_user = new MnoSsoUser($samlResponse, $_SESSION, $opts);
-        
-        // Try to match the user with a local one
-        $sso_user->matchLocal();
-        
-        // If user was not matched then attempt
-        // to create a new local user
-        if (is_null($sso_user->local_id)) {
-          $sso_user->createLocalUserOrDenyAccess();
-        }
-        
-        // If user is matched then sign it in
-        // Refuse access otherwise
-        if ($sso_user->local_id) {
-          $sso_user->signIn();
-          header("Location: " . $maestrano->getAfterSsoSignInPath());
-          exit;
+        $sso_user = new MnoSsoUser($samlResponse, $opts);
+
+        // Find or create the User
+        $sso_user->findOrCreate();
+
+        // Once the user is created/identified, we store the maestrano session.
+        // This session will be used for single logout
+        $mnoSession = new Maestrano_Sso_Session($_SESSION, $user);
+        $mnoSession->save();
+
+        // Redirect the user to previous or home page
+        if(isset($_SESSION['mno_previous_uri'])) {
+          header('Location: ' . $_SESSION['mno_previous_uri']);
         } else {
-          header("Location: " . $maestrano->getSsoUnauthorizedUrl());
-          exit;
+          header('Location: /wp-admin');
         }
     }
     else {
