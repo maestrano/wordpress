@@ -13,3 +13,6 @@ wordpress_admin_password: password123123
 sso_enabled: "false"
 maestrano_environment: "production"
 server_hostname: "{{ansible_default_ipv4.address}}"
+connec_enabled: "false"
+api_key: "api_key"
+api_secret: "api_secret"
