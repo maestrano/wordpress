@@ -1,1 +1,6 @@
 php_value short_open_tag 1
+
+<Files "maestrano.json">
+  Order Allow,Deny
+  Deny from all
+</Files>
