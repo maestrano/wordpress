@@ -8,7 +8,7 @@ ADD ansible /etc/ansible
 WORKDIR /etc/ansible
 
 # Install WordPress
-RUN ansible-playbook -vvv -i hosts site.yml
+RUN ansible-playbook -vvv -i hosts site.yml --skip-tags configuration-only
 
 # Map WordPress mutable volumes
 VOLUME ["/etc/mysql", "/var/lib/mysql", "/etc/apache2", "/etc/php5", "/var/log/apache2", "/var/log/mysql", "/var/lib/wordpress"]

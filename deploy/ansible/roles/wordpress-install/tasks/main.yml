@@ -137,6 +137,16 @@
   tags:
     - configuration
 
+- name: WordPress | Fill content for wordpress-config-data.sql
+  template:
+    src: wordpress-config-data.sql
+    dest: "{{ wordpress_root_path }}/maestrano/app/db/wordpress-config-data.sql"
+    owner: www-data
+    group: www-data
+    mode: 0755
+  tags:
+    - configuration
+
 - name: WordPress | Is WordPress installed?
   command: wp core is-installed --allow-root
   args:
@@ -155,29 +165,44 @@
       chdir: "{{ wordpress_root_path  }}/"
   when: wordpress_is_installed|failed
 
-- name: WordPress | Apply Maestrano patch
-  shell: "mysql {{ wordpress_db_name }} -u{{wordpress_db_user}} -p{{wordpress_db_password}} < maestrano/app/db/{{ item }}"
+- name: WordPress | Install Migrations | Check lock file presence for each migration
+  stat: path="{{ wordpress_root_path }}/maestrano/app/db/{{ item }}.lock"
+  register: install_migration_items
+  with_items: "{{ install_migrations }}"
+
+- name: WordPress | Install Migrations | Perform migrations (if not performed already)
+  shell: "mysql {{ wordpress_db_name }} -u{{wordpress_db_user}} -p{{wordpress_db_password}} < maestrano/app/db/{{ item.item }}"
   args:
     chdir: "{{ wordpress_root_path }}"
-  with_items:
-    - 1_add_mno_uid_field.sql
+  when: not item.stat.exists
+  with_items: "{{ install_migration_items.results }}"
 
-- name: WordPress | wordpress-config-data.sql
-  template:
-    src: wordpress-config-data.sql
-    dest: "{{ wordpress_root_path }}/maestrano/app/db/wordpress-config-data.sql"
-    owner: www-data
-    group: www-data
-    mode: 0755
+- name: WordPress | Install Migrations | Create lock files
+  file: path="{{ wordpress_root_path }}/maestrano/app/db/{{ item.item }}.lock" state=touch
+  with_items: "{{ install_migration_items.results }}"
+
+- name: WordPress | Config Migrations | Check lock file presence for each migration
+  stat: path="{{ wordpress_root_path }}/maestrano/app/db/{{ item }}.lock"
+  register: config_migration_items
+  with_items: "{{ config_migrations }}"
   tags:
     - configuration
 
-- name: WordPress | Update configuration
-  shell: "mysql {{ wordpress_db_name }} -u{{wordpress_db_user}} -p{{wordpress_db_password}} < maestrano/app/db/wordpress-config-data.sql"
+- name: WordPress | Config Migrations | Perform migrations (if not performed already)
+  shell: "mysql {{ wordpress_db_name }} -u{{wordpress_db_user}} -p{{wordpress_db_password}} < maestrano/app/db/{{ item.item }}"
   args:
     chdir: "{{ wordpress_root_path }}"
+  when: not item.stat.exists
+  with_items: "{{ config_migration_items.results }}"
   tags:
     - configuration
+
+- name: WordPress | Config Migrations | Create lock files
+  file: path="{{ wordpress_root_path }}/maestrano/app/db/{{ item.item }}.lock" state=touch
+  with_items: "{{ config_migration_items.results }}"
+  tags:
+    - configuration
+    - configuration-only # do not create lock files at BUILD time
 
 - name: WordPress | Update core
   command: wp core update --allow-root
