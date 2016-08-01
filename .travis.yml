@@ -19,6 +19,9 @@ install:
   - "{ echo '[defaults]'; echo 'roles_path = ansible/roles/'; echo 'hostfile = ansible/hosts'; } >> ansible.cfg"
 
 script:
+  # Go to deploy directory
+  - "cd deploy"
+
   # Check the role/playbook's syntax.
   - "ansible-playbook ansible/site.yml --syntax-check"
 
