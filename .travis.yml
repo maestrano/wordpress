@@ -1,0 +1,44 @@
+---
+
+language: python
+python: "2.7"
+sudo: required
+dist: trusty
+
+services:
+  - docker
+
+before_install:
+  - sudo apt-get install -y curl
+
+install:
+  # Install Ansible.
+  - pip install ansible
+
+  # Add ansible.cfg to pick up roles path.
+  - "{ echo '[defaults]'; echo 'roles_path = ansible/roles/'; echo 'hostfile = ansible/hosts'; } >> ansible.cfg"
+
+script:
+  # Check the role/playbook's syntax.
+  - "ansible-playbook ansible/site.yml --syntax-check"
+
+  # Build docker image
+  - docker build -t maestrano/wordpress:travis .
+
+  # Run image
+  - docker run -td --name travis-test maestrano/wordpress:travis
+
+  # Get ip address
+  - "container_ip=`docker inspect --format '{{ .NetworkSettings.IPAddress }}' travis-test`"
+
+  # Wait for ansible to finish running
+  - sleep 10
+
+  # Check that apache is up
+  - "curl http://${container_ip}:80/"
+
+  # Check to make sure we can connect to MySQL via Unix socket and that the wordpress database exists
+  - docker exec -i travis-test mysql -u root -e 'show databases;' | grep -q 'wordpress' && (echo 'MySQL running normally' && exit 0) || (echo 'MySQL not running' && exit 1)
+
+  # Check to make sure we can connect to MySQL via TCP.
+  - docker exec -i travis-test mysql -u root -h 127.0.0.1 -e 'show databases;' | grep -q 'wordpress' && (echo 'MySQL running normally' && exit 0) || (echo 'MySQL not running' && exit 1)
