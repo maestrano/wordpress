@@ -22,9 +22,6 @@ script:
   # Go to deploy directory
   - "cd deploy"
 
-  # Check the role/playbook's syntax.
-  - "ansible-playbook ansible/site.yml --syntax-check"
-
   # Build docker image
   - docker build -t maestrano/wordpress:travis .
 
